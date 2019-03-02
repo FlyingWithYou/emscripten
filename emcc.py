@@ -486,6 +486,36 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
       print(' '.join(shared.Building.doublequote_spaces(parts[1:])))
     return 0
 
+  # Default to using C++.
+  use_cxx = True
+
+  def get_language_mode(args):
+    return_next = False
+    for item in args:
+      if return_next:
+        return item
+      if item == '-x':
+        return_next = True
+        continue
+      if item.startswith('-x'):
+        return item[2:]
+    return None
+
+  def has_c_source(args):
+    for a in args:
+      if a[0] != '-' and a.endswith(C_ENDINGS + OBJC_ENDINGS):
+        return True
+    return False
+
+  language_mode = get_language_mode(args)
+  has_fixed_language_mode = language_mode != None
+  if language_mode == 'c':
+    use_cxx = False
+
+  if not has_fixed_language_mode:
+    if not run_via_emxx and has_c_source(args):
+      use_cxx = False
+
   def is_minus_s_for_emcc(args, i):
     # -s OPT=VALUE or -s OPT are interpreted as emscripten flags.
     # -s by itself is a linker option (alias for --strip-all)
@@ -651,7 +681,7 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
   # Find and remove any -o argumnts.  Final one should take precedence, if
   # multiple are specified.
   def strip_specified_target(args):
-    newargs = []
+    outargs = []
     specified_target = None
     use_next = False
     for arg in args:
@@ -664,8 +694,8 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
       elif arg.startswith('-o'):
         specified_target = arg[2:]
       else:
-        newargs.append(arg)
-    return specified_target, newargs
+        outargs.append(arg)
+    return specified_target, outargs
 
   specified_target, args = strip_specified_target(args)
 
@@ -698,9 +728,6 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
   def optimizing(opts):
     return '-O0' not in opts
 
-  # Default to using C++.
-  use_cxx = True
-
   with ToolchainProfiler.profile_block('parse arguments and setup'):
     ## Parse args
 
@@ -717,33 +744,6 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
         # if there is no suffix
         newargs[i] += newargs[i + 1]
         newargs[i + 1] = ''
-
-    def get_language_mode(args):
-      return_next = False
-      for item in args:
-        if return_next:
-          return item
-        if item == '-x':
-          return_next = True
-          continue
-        if item.startswith('-x'):
-          return item[2:]
-      return None
-
-    def has_c_source(args):
-      for a in args:
-        if a[0] != '-' and a.endswith(C_ENDINGS + OBJC_ENDINGS):
-          return True
-      return False
-
-    language_mode = get_language_mode(newargs)
-    has_fixed_language_mode = language_mode != None
-    if language_mode == 'c':
-      use_cxx = False
-
-    if not has_fixed_language_mode:
-      if not run_via_emxx and has_c_source(args):
-        use_cxx = False
 
     options, settings_changes, newargs = parse_args(newargs)
 
